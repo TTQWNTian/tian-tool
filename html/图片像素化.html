@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>像素化工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #ffffff;
+            font-family: -apple-system, 'Segoe UI', 'Inter', system-ui, sans-serif;
+            padding: 40px 24px;
+            color: #1a1a1a;
+        }
+        
+        /* 主容器 */
+        body>div:first-child {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        /* 上传区域 */
+        input[type="file"] {
+            width: 100%;
+            padding: 20px 0;
+            margin-bottom: 32px;
+            border: none;
+            background: transparent;
+            font-size: 0.9rem;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 1px solid #eaeaea;
+            border-radius: 0;
+        }
+        
+        input[type="file"]:hover {
+            border-bottom-color: #000;
+        }
+        
+        input[type="file"]::file-selector-button {
+            background: #000;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 0;
+            font-weight: 500;
+            font-size: 0.8rem;
+            margin-right: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        input[type="file"]::file-selector-button:hover {
+            opacity: 0.8;
+        }
+        
+        /* 控制面板 */
+        div:has(> label) {
+            padding: 0 0 32px 0;
+            margin-bottom: 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 32px;
+            border: none;
+            background: transparent;
+        }
+        
+        label {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            font-weight: 400;
+            color: #333;
+            cursor: pointer;
+        }
+        
+        /* 滑块 */
+        input[type="range"] {
+            width: 180px;
+            height: 1px;
+            -webkit-appearance: none;
+            background: #ccc;
+            border-radius: 0;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #000;
+            cursor: pointer;
+            border: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        
+        #blockVal {
+            font-size: 0.75rem;
+            color: #888;
+            background: transparent;
+            padding: 0;
+        }
+        
+        /* 复选框 */
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            margin: 0;
+        }
+        
+        /* 下载按钮 */
+        button {
+            background: #000;
+            border: none;
+            padding: 10px 28px;
+            border-radius: 0;
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: white;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin: 32px 0 40px 0;
+        }
+        
+        button:hover {
+            opacity: 0.7;
+        }
+        
+        /* 图片/画布区域 */
+        div:has(> img),
+        div:has(> canvas) {
+            margin-top: 32px;
+        }
+        
+        div:has(> img) div,
+        div:has(> canvas) div {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #aaa;
+            margin: 16px 0;
+        }
+        
+        img,
+        canvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        /* 尺寸信息 */
+        #sizeInfo {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-top: 12px;
+            background: transparent;
+            padding: 0;
+        }
+        
+        @media (max-width: 640px) {
+            body {
+                padding: 24px 16px;
+            }
+            
+            div:has(> label) {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
+            
+            button {
+                width: 100%;
+                text-align: center;
+            }
+            
+            label {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <input type="file" id="fileInput">
+    <div>
+        <label>像素块大小: <input type="range" id="blockSize" min="2" max="50" value="15"> <span id="blockVal">15</span> px</label>
+    </div>
+    <div>
+        <label><input type="checkbox" id="compressCanvas"> 压缩画布</label>
+    </div>
+    <div>
+        <label><input type="checkbox" id="removeAlphaEdge" checked> 去除半透明边缘（让马赛克块边缘更干净）</label>
+    </div>
+    <button id="downloadBtn">下载为PNG</button>
+    <div>
+        <div>像素化结果:</div>
+        <canvas id="resultCanvas"></canvas>
+        <div>原图:</div>
+        <img id="originalImg">
+        <div id="sizeInfo"></div>
+    </div>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const originalImg = document.getElementById('originalImg');
+        const resultCanvas = document.getElementById('resultCanvas');
+        const blockSlider = document.getElementById('blockSize');
+        const blockVal = document.getElementById('blockVal');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const compressCheckbox = document.getElementById('compressCanvas');
+        const removeAlphaEdge = document.getElementById('removeAlphaEdge');
+        const sizeInfo = document.getElementById('sizeInfo');
+        
+        let currentImage = null;
+        let imgWidth = 0,
+            imgHeight = 0;
+        let hasImage = false;
+        
+        blockSlider.oninput = function() {
+            blockVal.innerText = blockSlider.value;
+            if (hasImage) renderMosaic();
+        };
+        compressCheckbox.onchange = function() { if (hasImage) renderMosaic(); };
+        removeAlphaEdge.onchange = function() { if (hasImage) renderMosaic(); };
+        
+        fileInput.onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = function() {
+                if (currentImage && currentImage.src && currentImage.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(currentImage.src);
+                }
+                currentImage = img;
+                imgWidth = img.width;
+                imgHeight = img.height;
+                originalImg.src = url;
+                hasImage = true;
+                renderMosaic();
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(url);
+                alert('图片加载失败');
+            };
+            img.src = url;
+        };
+        
+        function renderMosaic() {
+            if (!hasImage || !currentImage) return;
+            const block = parseInt(blockSlider.value, 10);
+            const removeAlpha = removeAlphaEdge.checked;
+            const compress = compressCheckbox.checked;
+            
+            const blocksX = Math.ceil(imgWidth / block);
+            const blocksY = Math.ceil(imgHeight / block);
+            
+            let outWidth, outHeight;
+            if (compress) {
+                outWidth = blocksX;
+                outHeight = blocksY;
+            } else {
+                outWidth = imgWidth;
+                outHeight = imgHeight;
+            }
+            
+            resultCanvas.width = outWidth;
+            resultCanvas.height = outHeight;
+            sizeInfo.innerText = compress ?
+                `压缩后尺寸: ${outWidth} x ${outHeight} 像素 (每个像素代表一个马赛克块)` :
+                `原始尺寸: ${outWidth} x ${outHeight} 像素`;
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = imgWidth;
+            canvas.height = imgHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(currentImage, 0, 0, imgWidth, imgHeight);
+            const imageData = ctx.getImageData(0, 0, imgWidth, imgHeight);
+            const data = imageData.data;
+            
+            const blockColors = [];
+            for (let by = 0; by < blocksY; by++) {
+                blockColors[by] = [];
+                for (let bx = 0; bx < blocksX; bx++) {
+                    const startX = bx * block;
+                    const startY = by * block;
+                    const endX = Math.min(startX + block, imgWidth);
+                    const endY = Math.min(startY + block, imgHeight);
+                    let rSum = 0,
+                        gSum = 0,
+                        bSum = 0,
+                        aSum = 0,
+                        count = 0;
+                    for (let y = startY; y < endY; y++) {
+                        for (let x = startX; x < endX; x++) {
+                            const idx = (y * imgWidth + x) * 4;
+                            rSum += data[idx];
+                            gSum += data[idx + 1];
+                            bSum += data[idx + 2];
+                            aSum += data[idx + 3];
+                            count++;
+                        }
+                    }
+                    let r = Math.floor(rSum / count);
+                    let g = Math.floor(gSum / count);
+                    let b = Math.floor(bSum / count);
+                    let a = Math.floor(aSum / count);
+                    if (removeAlpha && a < 255) {
+                        if (a < 128) {
+                            a = 0;
+                        } else {
+                            a = 255;
+                        }
+                    }
+                    blockColors[by][bx] = { r: r, g: g, b: b, a: a };
+                }
+            }
+            
+            const outCtx = resultCanvas.getContext('2d');
+            if (compress) {
+                const outData = outCtx.createImageData(outWidth, outHeight);
+                const out = outData.data;
+                for (let by = 0; by < blocksY; by++) {
+                    for (let bx = 0; bx < blocksX; bx++) {
+                        const color = blockColors[by][bx];
+                        const idx = (by * outWidth + bx) * 4;
+                        out[idx] = color.r;
+                        out[idx + 1] = color.g;
+                        out[idx + 2] = color.b;
+                        out[idx + 3] = color.a;
+                    }
+                }
+                outCtx.putImageData(outData, 0, 0);
+            } else {
+                const outData = outCtx.createImageData(outWidth, outHeight);
+                const out = outData.data;
+                for (let by = 0; by < blocksY; by++) {
+                    for (let bx = 0; bx < blocksX; bx++) {
+                        const color = blockColors[by][bx];
+                        const startX = bx * block;
+                        const startY = by * block;
+                        const endX = Math.min(startX + block, outWidth);
+                        const endY = Math.min(startY + block, outHeight);
+                        for (let y = startY; y < endY; y++) {
+                            for (let x = startX; x < endX; x++) {
+                                const idx = (y * outWidth + x) * 4;
+                                out[idx] = color.r;
+                                out[idx + 1] = color.g;
+                                out[idx + 2] = color.b;
+                                out[idx + 3] = color.a;
+                            }
+                        }
+                    }
+                }
+                outCtx.putImageData(outData, 0, 0);
+            }
+        }
+        
+        downloadBtn.onclick = function() {
+            if (!hasImage) {
+                alert('请先上传图片');
+                return;
+            }
+            try {
+                const compress = compressCheckbox.checked;
+                const block = parseInt(blockSlider.value, 10);
+                const blocksX = Math.ceil(imgWidth / block);
+                const blocksY = Math.ceil(imgHeight / block);
+                const suffix = compress ? `_${blocksX}x${blocksY}` : '';
+                const link = document.createElement('a');
+                link.download = `pixel${suffix}.png`;
+                link.href = resultCanvas.toDataURL('image/png');
+                link.click();
+            } catch (e) {
+                alert('下载失败: ' + e.message);
+            }
+        };
+    </script>
+</body>
+
+</html>
